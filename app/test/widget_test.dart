@@ -16,6 +16,6 @@ void main() {
     expect(find.text('Mapa Assistivo'), findsOneWidget);
     expect(find.text('Centro Cultural Aurora'), findsOneWidget);
     expect(find.text('Planejar trajeto'), findsOneWidget);
-    expect(find.text('Começar navegação'), findsOneWidget);
+    expect(find.text('Calcular rota'), findsOneWidget);
   });
 }

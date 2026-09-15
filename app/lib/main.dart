@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:convert';
 
 void main() => runApp(const AssistiveMapApp());
 
@@ -43,12 +46,73 @@ class _MapHomePageState extends State<MapHomePage> {
   int _selectedFloor = 1;
   String _selectedAccessibility = 'Todos';
   String _destination = 'Recepção';
-  final destinations = const [
-    'Recepção',
-    'Banheiro acessível',
-    'Auditório',
-    'Elevador',
-  ];
+  String _search = '';
+  String _routeSummary = 'Rota recomendada\n4 min  -  180 m  -  sem escadas';
+  bool _loadingRoute = false;
+  final _searchController = TextEditingController();
+  final destinations = const <String, String>{
+    'Recepção': 'reception',
+    'Banheiro acessível': 'accessible_bathroom',
+    'Auditório': 'auditorium',
+    'Elevador': 'elevator',
+  };
+
+  List<String> get _filteredDestinations => destinations.keys
+      .where((name) => name.toLowerCase().contains(_search.toLowerCase()))
+      .toList();
+
+  Future<void> _requestRoute() async {
+    setState(() => _loadingRoute = true);
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8080/routes'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'destination_id': destinations[_destination],
+          'accessibility': switch (_selectedAccessibility) {
+            'Cadeira de rodas' => 'wheelchair',
+            'Baixa visão' => 'low_vision',
+            'Mobilidade reduzida' => 'reduced_mobility',
+            _ => 'all',
+          },
+        }),
+      );
+      if (response.statusCode != 200) throw Exception('Rota indisponível');
+      final route = jsonDecode(response.body) as Map<String, dynamic>;
+      setState(() {
+        _routeSummary =
+            'Rota recomendada\n${route['duration_minutes']} min  -  ${route['distance_meters']} m  -  ${route['floor_changes'] == 0 ? 'sem escadas' : '${route['floor_changes']} troca de andar'}';
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Inicie a API em http://127.0.0.1:8080'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingRoute = false);
+    }
+  }
+
+  Future<void> _openUfmsMap() async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=Universidade+Federal+de+Mato+Grosso+do+Sul',
+    );
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir o Google Maps')),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +127,11 @@ class _MapHomePageState extends State<MapHomePage> {
             tooltip: 'Configurações de acessibilidade',
             onPressed: () {},
             icon: const Icon(Icons.accessibility_new),
+          ),
+          IconButton(
+            tooltip: 'Abrir UFMS no Google Maps',
+            onPressed: _openUfmsMap,
+            icon: const Icon(Icons.map_outlined),
           ),
           const SizedBox(width: 8),
         ],
@@ -169,13 +238,35 @@ class _MapHomePageState extends State<MapHomePage> {
             style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 16),
+          TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _search = value),
+            decoration: InputDecoration(
+              labelText: 'Buscar local',
+              hintText: 'Ex.: banheiro, auditório...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _search.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Limpar busca',
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _search = '');
+                      },
+                      icon: const Icon(Icons.clear),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue: _destination,
+            initialValue: _filteredDestinations.contains(_destination)
+                ? _destination
+                : null,
             decoration: const InputDecoration(
               labelText: 'Quero chegar em',
               prefixIcon: Icon(Icons.place_outlined),
             ),
-            items: destinations
+            items: _filteredDestinations
                 .map((item) => DropdownMenuItem(value: item, child: Text(item)))
                 .toList(),
             onChanged: (value) =>
@@ -213,15 +304,18 @@ class _MapHomePageState extends State<MapHomePage> {
               color: const Color(0xFFE4F2F0),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.route, color: Color(0xFF087F8C)),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Rota recomendada\n4 min  -  180 m  -  sem escadas',
-                    style: TextStyle(height: 1.5, fontWeight: FontWeight.w700),
+                    _routeSummary,
+                    style: const TextStyle(
+                      height: 1.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -231,11 +325,15 @@ class _MapHomePageState extends State<MapHomePage> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Navegação iniciada')),
-              ),
-              icon: const Icon(Icons.navigation),
-              label: const Text('Começar navegação'),
+              onPressed: _loadingRoute ? null : _requestRoute,
+              icon: _loadingRoute
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.navigation),
+              label: Text(_loadingRoute ? 'Calculando...' : 'Calcular rota'),
             ),
           ),
           const SizedBox(height: 24),
