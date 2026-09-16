@@ -35,7 +35,7 @@ Set-Location api
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-uvicorn main:app --reload --host 127.0.0.1 --port 8080
+uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
 A documentação interativa fica disponível em `http://127.0.0.1:8080/docs`.
@@ -51,6 +51,11 @@ flutter run -d chrome
 ```
 
 Também é possível pressionar `F5` no VS Code usando a configuração `Mapa Assistivo (Chrome)`.
+
+No Chrome/Windows, o app usa `http://127.0.0.1:8080`. No Android Emulator,
+`127.0.0.1` aponta para o próprio emulador, então o app usa automaticamente
+`http://10.0.2.2:8080`, que representa o computador hospedeiro. Por isso a API
+deve ser iniciada com `--host 0.0.0.0`.
 
 ## API
 

@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:open_file/open_file.dart';
 
 void main() => runApp(const AssistiveMapApp());
 
@@ -43,6 +47,12 @@ class MapHomePage extends StatefulWidget {
 }
 
 class _MapHomePageState extends State<MapHomePage> {
+  static const String _campusMapAsset = 'assets/mapa_cidade_universitaria.pdf';
+
+  String get _apiBaseUrl => defaultTargetPlatform == TargetPlatform.android
+      ? 'http://10.0.2.2:8080'
+      : 'http://127.0.0.1:8080';
+
   int _selectedFloor = 1;
   String _selectedAccessibility = 'Todos';
   String _destination = 'Recepção';
@@ -65,7 +75,7 @@ class _MapHomePageState extends State<MapHomePage> {
     setState(() => _loadingRoute = true);
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8080/routes'),
+        Uri.parse('$_apiBaseUrl/routes'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'destination_id': destinations[_destination],
@@ -85,11 +95,9 @@ class _MapHomePageState extends State<MapHomePage> {
       });
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Inicie a API em http://127.0.0.1:8080'),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Inicie a API em $_apiBaseUrl')));
       }
     } finally {
       if (mounted) setState(() => _loadingRoute = false);
@@ -97,14 +105,38 @@ class _MapHomePageState extends State<MapHomePage> {
   }
 
   Future<void> _openUfmsMap() async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=Universidade+Federal+de+Mato+Grosso+do+Sul',
-    );
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
-        mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir o Google Maps')),
+    try {
+      final byteData = await rootBundle.load(_campusMapAsset);
+      final tempFile = File(
+        '${Directory.systemTemp.path}/mapa_cidade_universitaria.pdf',
       );
+      await tempFile.writeAsBytes(
+        byteData.buffer.asUint8List(
+          byteData.offsetInBytes,
+          byteData.lengthInBytes,
+        ),
+      );
+
+      final result = await OpenFile.open(tempFile.path);
+      if (result.type != ResultType.done && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível abrir o mapa da Cidade Universitária',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Adicione o PDF em assets/mapa_cidade_universitaria.pdf',
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -129,7 +161,7 @@ class _MapHomePageState extends State<MapHomePage> {
             icon: const Icon(Icons.accessibility_new),
           ),
           IconButton(
-            tooltip: 'Abrir UFMS no Google Maps',
+            tooltip: 'Abrir mapa da Cidade Universitária',
             onPressed: _openUfmsMap,
             icon: const Icon(Icons.map_outlined),
           ),
