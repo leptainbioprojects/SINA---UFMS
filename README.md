@@ -9,7 +9,7 @@ Aplicativo Flutter para localizar ambientes e planejar rotas acessíveis em pré
 - Busca de ambientes no painel de planejamento.
 - Filtros para todos, cadeira de rodas, baixa visão e mobilidade reduzida.
 - Consulta de rota pela API em `POST /routes`.
-- Botão para abrir a localização da UFMS no Google Maps por URL.
+- Botão para abrir o mapa da Cidade Universitária a partir de um PDF local salvo no app.
 - Dados atuais ainda são demonstrativos; distâncias e instruções serão substituídas pelos dados das plantas arquitetônicas.
 
 ## Estrutura
@@ -19,10 +19,53 @@ api/
   main.py              API FastAPI, locais e rotas
   requirements.txt     Dependências Python
 app/
+  assets/
+    mapa_cidade_universitaria.pdf  Mapa local da Cidade Universitária
   lib/main.dart        Interface e interação do aplicativo Flutter
   test/                Testes de widgets
 .vscode/launch.json    Configuração para iniciar o Flutter pelo VS Code
 ```
+
+## Requisitos
+
+- Python 3.10+
+- Flutter SDK
+- VS Code (opcional, mas recomendado)
+- Android Studio + emulador Android (para testes mobile)
+
+## Como trocar o PDF do mapa
+
+1. Coloque o novo arquivo na pasta `app/assets/`.
+2. Renomeie para `mapa_cidade_universitaria.pdf` ou ajuste o nome no código.
+3. Verifique o caminho em `app/lib/main.dart` no campo `_campusMapAsset`.
+4. Rode o app e teste o botão do mapa.
+
+Exemplo:
+
+```dart
+static const String _campusMapAsset = 'assets/mapa_cidade_universitaria.pdf';
+```
+
+## Testando o botão do mapa
+
+### Windows/Desktop
+
+```powershell
+Set-Location app
+flutter run -d windows
+```
+
+Ao abrir o app, clique no botão do mapa na barra superior e confirme que o PDF abre com o leitor padrão do sistema.
+
+### Android
+
+```powershell
+Set-Location app
+flutter devices
+flutter run -d <device_id>
+```
+
+Se estiver usando um emulador Android, confirme que a API está rodando em `http://10.0.2.2:8080`. Depois clique no botão do mapa e valide se o PDF é aberto corretamente.
 
 ## Como executar
 
@@ -108,7 +151,7 @@ Os valores aceitos para `accessibility` são `all`, `wheelchair`, `low_vision` e
 - `_MapHomePageState`: mantém o andar, destino, busca, filtro de acessibilidade e estado de carregamento da rota.
 - `_filteredDestinations`: filtra os destinos conforme o texto pesquisado.
 - `_requestRoute()`: envia destino e acessibilidade para `POST /routes` e atualiza o resumo da rota.
-- `_openUfmsMap()`: abre a busca da UFMS no Google Maps usando uma URL externa.
+- `_openUfmsMap()`: carrega o PDF local da Cidade Universitária do asset do app e abre com o visualizador do sistema.
 - `_wideLayout()` e `_compactLayout()`: escolhem o layout para telas largas ou estreitas.
 - `_mapPanel()`: exibe o prédio, seletor de andar, planta e legenda.
 - `_floorSelector()`: troca o andar visualizado.
@@ -142,11 +185,13 @@ Exemplo de uma aresta do grafo:
 }
 ```
 
-O Google Maps pode localizar o campus e abrir navegação externa. Ele não cria automaticamente rotas internas a partir de plantas privadas; o grafo interno precisa ser construído com os dados da UFMS.
+O PDF local é a solução atual para disponibilizar a planta da Cidade Universitária sem depender de serviços externos. Ele é útil para consulta e localização do campus, mas ainda não substitui o cálculo interno de rotas sobre um grafo arquitetônico.
 
-## Google Maps embutido
+## Mapa local no app
 
-O botão atual abre o Google Maps por URL e não exige chave. Para mostrar o mapa dentro do aplicativo, será necessário:
+O aplicativo agora usa um arquivo PDF salvo dentro do projeto em `app/assets/mapa_cidade_universitaria.pdf`. Quando o usuário toca no botão do mapa, o app copia esse arquivo para o diretório temporário e abre com o leitor padrão do sistema.
+
+Essa abordagem funciona bem para distribuição local e evita a necessidade de uma chave de API externa. Para uma funcionalidade de mapa embutido e interativo no futuro, será necessário:
 
 - criar uma chave no Google Cloud;
 - ativar Maps SDK for Android/iOS e Maps JavaScript API para web;
